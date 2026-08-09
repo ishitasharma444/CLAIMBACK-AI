@@ -245,3 +245,12 @@ cd backend
 pip install -r requirements.txt
 
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8003
+### Personalized Account Setup
+
+During account creation, users can add their own information, preferences
+and personal values. This allows ClaimBack to understand what matters to
+them and provide protection recommendations that are relevant to their
+individual needs.
+
+Users can also create and manage their own custom entries instead of
+being restricted to predefined options.
