@@ -1,94 +1,42 @@
-from __future__ import annotations
-
-from fastapi import FastAPI, Request
+import os
+from pathlib import Path
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
 from app.core.config import settings
-from app.core.database import init_db
+from app.routers import auth, claims, evidence, protection, resolution
 
-# Import models so SQLAlchemy registers them before create_all()
-from app.models.analysis import Analysis
-from app.models.claim import Claim
-from app.models.document import Document
-from app.models.evidence import Evidence
-from app.models.protection import (
-    DocumentAnalysis,
-    ProtectionAction,
-    ProtectionFinding,
-)
-from app.models.resolution import ResolutionStep
-from app.models.user import User
-
-from app.routers.analysis import router as analysis_router
-from app.routers.auth import router as auth_router
-from app.routers.claims import router as claims_router
-from app.routers.evidence import router as evidence_router
-from app.routers.protection import router as protection_router
-from app.routers.resolution import router as resolution_router
-
+# Ensure local upload directory exists
+upload_dir = Path(settings.upload_dir)
+upload_dir.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
-    title="ClaimBack API",
+    title=settings.app_name,
+    description="ClaimBack API - Protection analysis & Claim management",
     version="1.0.0",
-    description=(
-        "AI-powered consumer protection and claim resolution platform."
-    ),
 )
-
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-@app.exception_handler(Exception)
-async def global_exception_handler(
-    request: Request,
-    exc: Exception,
-) -> JSONResponse:
-
-    # Keep production responses generic.
-    # Detailed errors should be logged rather than exposed.
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "An unexpected error occurred."
-        },
-    )
+app.include_router(auth.router)
+app.include_router(protection.router)
+app.include_router(claims.router)
+app.include_router(evidence.router)
+app.include_router(resolution.router)
 
 
-@app.get(
-    "/health",
-    tags=["System"],
-)
-async def health_check() -> dict[str, str]:
+@app.get("/health", tags=["health"])
+async def health_check():
     return {"status": "ok"}
 
 
-app.include_router(auth_router)
-app.include_router(claims_router)
-app.include_router(evidence_router)
-app.include_router(analysis_router)
-app.include_router(protection_router)
-app.include_router(resolution_router)
-
-
 @app.on_event("startup")
-async def on_startup() -> None:
-    await init_db()
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-    )
+async def startup_event():
+    from app.core.database import engine, Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
