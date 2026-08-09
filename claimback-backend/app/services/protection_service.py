@@ -54,6 +54,15 @@ class ProtectionService:
         document: Document,
         analysis_result: ProtectionAnalysisResult,
     ) -> DocumentAnalysis:
+        findings_dict_list = [
+            f.model_dump() if hasattr(f, "model_dump") else f
+            for f in analysis_result.findings
+        ]
+        actions_dict_list = [
+            a.model_dump() if hasattr(a, "model_dump") else a
+            for a in analysis_result.actions
+        ]
+
         record = DocumentAnalysis(
             document_id=document.id,
             user_id=document.user_id,
@@ -71,29 +80,31 @@ class ProtectionService:
             precautions=analysis_result.precautions,
             immediate_actions=analysis_result.immediate_actions,
             questions_to_clarify=analysis_result.questions_to_clarify,
-            findings_json={"findings": analysis_result.findings, "actions": analysis_result.actions},
+            findings_json={"findings": findings_dict_list, "actions": actions_dict_list},
         )
         db.add(record)
         await db.commit()
         await db.refresh(record)
 
         for item in analysis_result.findings:
+            item_dict = item.model_dump() if hasattr(item, "model_dump") else (item if isinstance(item, dict) else {})
             finding = ProtectionFinding(
                 document_analysis_id=record.id,
-                category=str(item.get("category", "general")),
-                title=str(item.get("title", "Finding")),
-                description=str(item.get("description", "No description provided.")),
-                severity=str(item.get("severity", "medium")),
-                source_reference=item.get("source_reference"),
+                category=str(item_dict.get("category", "general")),
+                title=str(item_dict.get("title", "Finding")),
+                description=str(item_dict.get("description", "No description provided.")),
+                severity=str(item_dict.get("severity", "medium")),
+                source_reference=item_dict.get("source_reference"),
             )
             db.add(finding)
 
         for item in analysis_result.actions:
+            item_dict = item.model_dump() if hasattr(item, "model_dump") else (item if isinstance(item, dict) else {})
             action = ProtectionAction(
                 document_analysis_id=record.id,
-                title=str(item.get("title", "Action")),
-                description=str(item.get("description", "No description provided.")),
-                priority=str(item.get("priority", "medium")),
+                title=str(item_dict.get("title", "Action")),
+                description=str(item_dict.get("description", "No description provided.")),
+                priority=str(item_dict.get("priority", "medium")),
             )
             db.add(action)
 
@@ -103,8 +114,27 @@ class ProtectionService:
 
     @staticmethod
     async def analyze_document(db: AsyncSession, document: Document) -> DocumentAnalysis:
+        from app.services.document_extraction_service import extract_document_text
+
+        # 1. Read stored document & extract text
+        extraction = extract_document_text(document.file_path)
+        extracted_text = str(extraction.get("text", ""))
+
+        # 2. Call AI agent with extracted content
         agent = ProtectionAgent()
-        result = await agent.analyze_document(document.__dict__)
+        result = await agent.analyze_document_content(
+            extracted_text=extracted_text,
+            document_type=document.document_type,
+            provider_name=document.provider_name,
+            title=document.title,
+        )
+
+        # 3. Update document status
+        document.status = "analyzed"
+        db.add(document)
+        await db.commit()
+
+        # 4. Save analysis & return
         return await ProtectionService.create_analysis(db, document, result)
 
     @staticmethod
