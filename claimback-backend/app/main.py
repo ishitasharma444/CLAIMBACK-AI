@@ -30,6 +30,11 @@ app.include_router(evidence.router)
 app.include_router(resolution.router)
 
 
+@app.get("/", tags=["root"])
+async def root():
+    return {"message": "ClaimBack API is running", "status": "ok"}
+
+
 @app.get("/health", tags=["health"])
 async def health_check():
     return {"status": "ok"}
