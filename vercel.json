@@ -1,24 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "claimback-backend/app/main.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "Claim AI/claimback-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "claimback-backend/app/main.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "Claim AI/claimback-frontend/$1"
-    }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" }
   ]
 }
